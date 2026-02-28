@@ -1,0 +1,76 @@
+# ================================
+# General
+# ================================
+.DS_Store
+*.log
+*.tmp
+*.swp
+*.bak
+
+# ================================
+# Simulation files (ModelSim / Questa / Icarus)
+# ================================
+*.vcd
+*.wlf
+*.vvp
+transcript
+work/
+vsim.wlf
+modelsim.ini
+
+# ================================
+# Xilinx Vivado
+# ================================
+*.jou
+*.str
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+*.xpr
+*.bit
+*.ltx
+
+# ================================
+# Xilinx ISE (older tools)
+# ================================
+*.ise
+*.xise
+*.ngc
+*.ngd
+*.map
+*.mrp
+*.par
+*.bgn
+*.twr
+
+# ================================
+# Quartus (Intel FPGA)
+# ================================
+db/
+incremental_db/
+*.qpf
+*.qsf
+*.sof
+*.pof
+*.rpt
+
+# ================================
+# Verilator
+# ================================
+obj_dir/
+
+# ================================
+# Coverage / test output
+# ================================
+coverage/
+*.gcda
+*.gcno
+
+# ================================
+# Editor
+# ================================
+.vscode/
+.idea/

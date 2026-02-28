@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// UART Package File
+// Author: Saksham Aggarwal
+// Copyright (c) 2026 Saksham Aggarwal
+// License: MIT
+// -----------------------------------------------------------------------------
+
+
 `timescale 1ns/1ps
 package uart_pkg;
 

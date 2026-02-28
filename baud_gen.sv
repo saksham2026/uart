@@ -1,3 +1,12 @@
+// -----------------------------------------------------------------------------
+// UART BAUD GENERATOR MODULE
+// Author: Saksham Aggarwal
+// Copyright (c) 2026 Saksham Aggarwal
+// License: MIT
+// -----------------------------------------------------------------------------
+
+
+
 `timescale 1ns/1ps
 module baud_gen
 	import uart_pkg::*;
