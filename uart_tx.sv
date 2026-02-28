@@ -1,5 +1,5 @@
 // ============================================================================
-// UART Receiver (uart_rx)
+// UART Transmitter (uart_tx)
 // ----------------------------------------------------------------------------
 // Author      : Saksham Aggarwal
 // Created     : 2026
@@ -7,35 +7,32 @@
 // SPDX-License-Identifier: MIT
 // ----------------------------------------------------------------------------
 // Description :
-//   Parameterized UART receiver with oversampling tick input.
+//   Parameterized UART transmitter with oversampling tick input.
+//   Sends 1 start bit, DATA_WIDTH data bits (LSB first), and 1 stop bit.
 //   Frame format: 1 Start | DATA_WIDTH Data | 1 Stop
-//   - Start bit validated at mid-sample
-//   - Data bits sampled at end of bit period
-//   - Stop bit verified high
-//   - Generates 1-cycle rx_done_o pulse when frame completes
 // ============================================================================
 
-`timescale 1ns/1ps
-
-module uart_rx
+module uart_tx
   import uart_pkg::*;
 (
     input  logic                     clk_i,
     input  logic                     rstn_i,
-    input  logic                     rx_i,
+    input  logic [DATA_WIDTH-1:0]    data_i,
+    input  logic                     tx_start_i,
     input  logic                     s_tick_i,      // oversample tick
-    output logic [DATA_WIDTH-1:0]    data_o,
-    output logic                     rx_done_o
+    output logic                     tx_o,
+    output logic                     tx_done_o
 );
 
     // -------------------------------------------------
-    // Parameters
+    // Internal Signals
     // -------------------------------------------------
-    localparam MID_SAMPLE = (OVERSAMPLE/2) - 1;
-    localparam END_SAMPLE = OVERSAMPLE - 1;
+    logic [$clog2(DATA_WIDTH)-1:0]    bit_count;
+    logic [$clog2(OVERSAMPLE)-1:0]    tick_count;
+    logic [DATA_WIDTH-1:0]            data;
 
     // -------------------------------------------------
-    // State Machine
+    // State Machine Definition
     // -------------------------------------------------
     typedef enum logic [1:0] {
         IDLE,
@@ -47,43 +44,45 @@ module uart_rx
     state_t state, next_state;
 
     // -------------------------------------------------
-    // Counters
-    // -------------------------------------------------
-    logic [$clog2(OVERSAMPLE)-1:0]     tick_count;
-    logic [$clog2(DATA_WIDTH)-1:0]     bit_count;
-
-    // -------------------------------------------------
-    // Tick Counter
+    // Oversample Tick Counter
     // -------------------------------------------------
     always_ff @(posedge clk_i or negedge rstn_i) begin
         if (!rstn_i)
             tick_count <= '0;
-        else if (state == IDLE)
-            tick_count <= '0;
-        else if (s_tick_i) begin
-            if ((state == START && tick_count == MID_SAMPLE) ||
-                (state == DATA  && tick_count == END_SAMPLE) ||
-                (state == STOP  && tick_count == END_SAMPLE))
-                tick_count <= '0;
-            else
-                tick_count <= tick_count + 1;
+        else if (state != IDLE) begin
+            if (s_tick_i) begin
+                if (tick_count == OVERSAMPLE-1)
+                    tick_count <= '0;
+                else
+                    tick_count <= tick_count + 1;
+            end
         end
+        else
+            tick_count <= '0;
     end
 
     // -------------------------------------------------
-    // Bit Counter (counts received DATA bits)
+    // Bit Counter (Counts DATA bits only)
     // -------------------------------------------------
     always_ff @(posedge clk_i or negedge rstn_i) begin
         if (!rstn_i)
             bit_count <= '0;
-        else if (state != DATA)
-            bit_count <= '0;
-        else if (s_tick_i && tick_count == END_SAMPLE) begin
+        else if (state == DATA && s_tick_i && tick_count == OVERSAMPLE-1) begin
             if (bit_count == DATA_WIDTH-1)
                 bit_count <= '0;
             else
                 bit_count <= bit_count + 1;
         end
+    end
+
+    // -------------------------------------------------
+    // Data Latching (Capture input when transmission starts)
+    // -------------------------------------------------
+    always_ff @(posedge clk_i or negedge rstn_i) begin
+        if (!rstn_i)
+            data <= '0;
+        else if (state == IDLE && tx_start_i)
+            data <= data_i;
     end
 
     // -------------------------------------------------
@@ -104,61 +103,49 @@ module uart_rx
 
         case (state)
 
-            // Wait for falling edge (start bit)
             IDLE : begin
-                if (!rx_i)
+                if (tx_start_i)
                     next_state = START;
             end
 
-            // Validate start bit at mid-sample
             START : begin
-                if (s_tick_i && tick_count == MID_SAMPLE) begin
-                    if (!rx_i)
-                        next_state = DATA;   // valid start
-                    else
-                        next_state = IDLE;   // false start
-                end
+                if (s_tick_i && tick_count == OVERSAMPLE-1)
+                    next_state = DATA;
             end
 
-            // Receive data bits
             DATA : begin
-                if (s_tick_i &&
-                    tick_count == END_SAMPLE &&
+                if (s_tick_i && tick_count == OVERSAMPLE-1 &&
                     bit_count == DATA_WIDTH-1)
                     next_state = STOP;
             end
 
-            // Validate stop bit
             STOP : begin
-                if (s_tick_i && tick_count == END_SAMPLE) begin
-                    if (rx_i)
-                        next_state = IDLE;   // valid stop
-                    else
-                        next_state = IDLE;   // framing error (still recover)
-                end
+                if (s_tick_i && tick_count == OVERSAMPLE-1)
+                    next_state = IDLE;
             end
 
         endcase
     end
 
     // -------------------------------------------------
-    // Data Sampling (LSB first)
+    // Output Logic
     // -------------------------------------------------
-    always_ff @(posedge clk_i or negedge rstn_i) begin
-        if (!rstn_i)
-            data_o <= '0;
-        else if (state == DATA &&
-                 s_tick_i &&
-                 tick_count == END_SAMPLE)
-            data_o[bit_count] <= rx_i;
+    always_comb begin
+        tx_o = 1'b1;  // default idle high
+
+        case (state)
+            IDLE  : tx_o = 1'b1;
+            START : tx_o = 1'b0;
+            DATA  : tx_o = data[bit_count]; // LSB first
+            STOP  : tx_o = 1'b1;
+        endcase
     end
 
     // -------------------------------------------------
-    // Done Pulse
+    // Transmission Done Pulse
     // -------------------------------------------------
-    assign rx_done_o = (state == STOP &&
+    assign tx_done_o = (state == STOP &&
                         s_tick_i &&
-                        tick_count == END_SAMPLE &&
-                        rx_i);   // stop bit valid
+                        tick_count == OVERSAMPLE-1);
 
 endmodule
