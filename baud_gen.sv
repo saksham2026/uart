@@ -29,8 +29,8 @@ module baud_gen
 
 	logic [WIDTH-1:0] baud_count;
 
-	always@(posedge clk_i or negedge rst_n_i) begin
-		if(!rst_n_i) baud_count <= '0;
+	always@(posedge clk_i or negedge rstn_i) begin
+		if(!rstn_i) baud_count <= '0;
 		else if(baud_count == M-1) baud_count <= '0;  // mod-N counter
 		else baud_count <= baud_count+1;
 	end
